@@ -2,17 +2,16 @@
 
 # Кома для скачивания и установки моего репо:
 #git clone https://github.com/SirFilippov/wiregram.git /home/wiregram && chmod +x /home/wiregram/setup_scr.sh && /home/wiregram/setup_scr.sh
-# -y поставить на обновах
 
 
 
 # Пути
-VPNMANAGER_DIR=$"/home/wiregram"
-ENV_DIR="$VPNMANAGER_DIR/tele_data.env"
-VENV_DIR="$VPNMANAGER_DIR/venv"
-VPNMANAGER_SCR="$VPNMANAGER_DIR/vpnmanager.py"
-EASY_WG_QUICK_DIR="$VPNMANAGER_DIR/easy-wg-quick"
-EASY_WG_QUICK_SCR="$VPNMANAGER_DIR/easy-wg-quick/easy-wg-quick"
+WIREGRAM_DIR=$"/home/wiregram"
+ENV_DIR="$WIREGRAM_DIR/tele_data.env"
+VENV_DIR="$WIREGRAM_DIR/venv"
+WIREGRAM_SCR="$WIREGRAM_DIR/wiregram.py"
+EASY_WG_QUICK_DIR="$WIREGRAM_DIR/easy-wg-quick"
+EASY_WG_QUICK_SCR="$WIREGRAM_DIR/easy-wg-quick/easy-wg-quick"
 
 # Создаем env
 read -r -p "Введите токен бота: " bot_token
@@ -33,27 +32,27 @@ wget -P "$EASY_WG_QUICK_DIR" https://raw.githubusercontent.com/burghardt/easy-wg
 chmod +x "$EASY_WG_QUICK_SCR"
 
 # Манипуляции по python
-chmod +x "$VPNMANAGER_SCR"
+chmod +x "$WIREGRAM_SCR"
 python3 -m venv $VENV_DIR
 source "$VENV_DIR/bin/activate"
-pip install -r "$VPNMANAGER_DIR/requirements.txt"
+pip install -r "$WIREGRAM_DIR/requirements.txt"
 deactivate
 
 # Создаем и запускаем сервис
 echo "[Unit]
-Description=VPNManager
+Description=wiregram
 
 [Service]
 Type=simple
 User=root
-ExecStart=$VENV_DIR/bin/python $VPNMANAGER_SCR
+ExecStart=$VENV_DIR/bin/python $WIREGRAM_SCR
 Restart=always
 
 [Install]
-WantedBy=multi-user.target" > /etc/systemd/system/vpnmanager.service
+WantedBy=multi-user.target" > /etc/systemd/system/wiregram.service
 
-systemctl enable vpnmanager.service
-systemctl start vpnmanager.service
+systemctl enable wiregram.service
+systemctl start wiregram.service
 
 
 
