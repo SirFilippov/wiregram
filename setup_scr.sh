@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Кома для скачивания и установки моего репо:
-#git clone https://github.com/SirFilippov/wiregram.git /home/wiregram && chmod +x /home/wiregram/setup_scr.sh && /home/wiregram/setup_scr.sh
+#cd /home && git clone https://github.com/SirFilippov/wiregram.git && chmod +x /home/wiregram/setup_scr.sh && /home/wiregram/setup_scr.sh
 
 
 
@@ -17,7 +17,7 @@ EASY_WG_QUICK_SCR="$WIREGRAM_DIR/easy-wg-quick/easy-wg-quick"
 read -r -p "Введите токен бота: " bot_token
 read -r -p "Введите телеграм-id администраторов через запятую без пробелов: " allowed_users
 echo "TELE_TOKEN=$bot_token" > "$ENV_DIR"
-echo "TELE_ADMIN_ID=$allowed_users" > "$ENV_DIR"
+echo "ALLOWED_USERS=$allowed_users" > "$ENV_DIR"
 
 # Установка нужного ПО
 apt-get -y update
