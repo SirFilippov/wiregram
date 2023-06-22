@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 BASE_DIR = Path(__file__).resolve().parent  # Путь к python скрипту
-ENV = os.path.join(BASE_DIR, '.env')  # Путь к env на сервере
+ENV = os.path.join(BASE_DIR, 'tele_data.env')  # Путь к env на сервере
 CLIENTS_DIR = os.path.join(BASE_DIR, 'clients')  # Путь к папке с клиентами
 EASY_WG_QUICK_DIR = os.path.join(BASE_DIR, 'easy-wg-quick')  # Путь к папке скрипта easy-wg-quick
 EASY_WG_QUICK_SCR = os.path.join(EASY_WG_QUICK_DIR, 'easy-wg-quick')  # Путь к исполняющему скрипту easy-wg-quick
