@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # Кома для скачивания и установки моего репо:
-# wget -P ~/ https://raw.githubusercontent.com/myrepo && ~/vpnmanager/setup.sh
+#git clone https://github.com/SirFilippov/wiregram.git /home/wiregram && chmod +x /home/wiregram/setup_scr.sh && /home/wiregram/setup_scr.sh
+# -y поставить на обновах
+
+
 
 # Пути
-VPNMANAGER_DIR=$"~/vpnmanager"
-ENV_DIR="$VPNMANAGER_DIR/.env"
+VPNMANAGER_DIR=$"/home/wiregram"
+ENV_DIR="$VPNMANAGER_DIR/tele_data.env"
 VENV_DIR="$VPNMANAGER_DIR/venv"
 VPNMANAGER_SCR="$VPNMANAGER_DIR/vpnmanager.py"
 EASY_WG_QUICK_DIR="$VPNMANAGER_DIR/easy-wg-quick"
@@ -18,11 +21,11 @@ echo "TELE_TOKEN=$bot_token" > "$ENV_DIR"
 echo "TELE_ADMIN_ID=$allowed_users" > "$ENV_DIR"
 
 # Установка нужного ПО
-apt-get update
-apt-get upgrade
-apt install wireguard
-apt install sqlite3
-apt install python3-venv
+apt-get -y update
+apt-get -y upgrade
+apt install -y wireguard
+apt install -y sqlite3
+apt install -y python3-venv
 
 # Установка easy-wg-quick_
 mkdir -p "$EASY_WG_QUICK_DIR"
