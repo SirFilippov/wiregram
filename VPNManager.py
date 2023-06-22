@@ -30,6 +30,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Todo: сделать систему для истечения срока подписки после итечения срока
+#  желательно по телеграму или васапу отправлять сообщение о том что подписка
+#  заканчивается, возможно это можно реализовать в APScheduler
+#
+# Todo: функция запуска wg в первый раз
+# Todo: сделать скип возможно ненужных настроек
+# Todo: повесить на все это докер
+# Todo: wg show с именами пиров а не кодами
+# Todo: сделать бота васап и телеги для клиентов
+# Todo: функция добавления id админов в env
+
+
 BASE_DIR = Path(__file__).resolve().parent  # Путь к python скрипту
 ENV = os.path.join(BASE_DIR, '.env')  # Путь к env на сервере
 CLIENTS_DIR = os.path.join(BASE_DIR, 'clients')  # Путь к папке с клиентами
@@ -39,7 +51,7 @@ DB_PATH = os.path.join(BASE_DIR, 'vpnmanager.db')  # Путь к БД
 WG_ETC_PATH = '/etc/wireguard/wghub.conf'  # Путь text файлу wireguard
 
 load_dotenv(ENV)
-ALLOWED_USERS = [int(i) for i in os.getenv('TELE_ADMIN_ID').split(',')]  # Телеграм id пользователей имеющих доступ
+ALLOWED_USERS = [int(i) for i in os.getenv('ALLOWED_USERS').split(',')]  # Телеграм id пользователей имеющих доступ
 TELE_TOKEN = os.getenv('TELE_TOKEN')  # Токен бота
 
 
