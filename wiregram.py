@@ -48,7 +48,7 @@ ENV = os.path.join(BASE_DIR, 'tele_data.env')  # Путь к env на серве
 CLIENTS_DIR = os.path.join(BASE_DIR, 'clients')  # Путь к папке с клиентами
 EASY_WG_QUICK_DIR = os.path.join(BASE_DIR, 'easy-wg-quick')  # Путь к папке скрипта easy-wg-quick
 EASY_WG_QUICK_SCR = os.path.join(EASY_WG_QUICK_DIR, 'easy-wg-quick')  # Путь к исполняющему скрипту easy-wg-quick
-DB_PATH = os.path.join(BASE_DIR, 'vpnmanager.db')  # Путь к БД
+DB_PATH = os.path.join(BASE_DIR, 'wiregram.db')  # Путь к БД
 WG_ETC_PATH = '/etc/wireguard/wghub.conf'  # Путь text файлу wireguard
 
 load_dotenv(ENV)
@@ -146,6 +146,7 @@ class Client(Base):
 
 
 if not os.path.exists(DB_PATH):
+    print('Создали бд')
     Base.metadata.create_all(engine)
 
 DELETE_CLIENT, GET_CONF, SHOW_CLIENTS = 0, 1, 2
