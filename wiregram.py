@@ -30,18 +30,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Todo: сделать систему для истечения срока подписки после итечения срока
-#  желательно по телеграму или васапу отправлять сообщение о том что подписка
-#  заканчивается, возможно это можно реализовать в APScheduler
-#
-# Todo: функция запуска wg в первый раз
-# Todo: сделать скип возможно ненужных настроек
-# Todo: повесить на все это докер
-# Todo: wg show с именами пиров а не кодами
-# Todo: сделать бота васап и телеги для клиентов
-# Todo: функция добавления id админов в env
-# Todo: conf и qr хранить в базе
-
 
 BASE_DIR = Path(__file__).resolve().parent  # Путь к python скрипту
 ENV = os.path.join(BASE_DIR, 'tele_data.env')  # Путь к env на сервере
@@ -213,18 +201,6 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif mess == '/get_conf':
             return GET_CONF
 
-    # if update.message.text == f'\U00002705Возобновить клиента':
-    #     await update.message.reply_text('\n'.join(show_usr_lst()),
-    #                                     reply_markup=ReplyKeyboardRemove())
-    #     await update.message.reply_text('Кого возобновить? /cancel что бы выйти из операции')
-    #     return START_USER
-    #
-    # if update.message.text == f'\U0000274CОстановить клиента':
-    #     await update.message.reply_text('\n'.join(show_usr_lst()),
-    #                                     reply_markup=ReplyKeyboardRemove())
-    #     await update.message.reply_text('Кого остановить? /cancel что бы выйти из операции')
-    #     return STOP_USER
-
 
 async def enter_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["first_name"] = update.message.text
@@ -336,12 +312,10 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mess.edit_text('Удилили треш')
     sleep(load_time)
 
-    # todo: изменить BASE_DIR на WG_ETC_PATH
     subprocess.call(['cp', f'wghub.conf', WG_ETC_PATH], cwd=EASY_WG_QUICK_DIR)
     await mess.edit_text(text='Скопировали wghub.conf')
     sleep(load_time)
 
-    # todo: включить рестарт
     if peer_id != 10:
         subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
         await mess.edit_text(text='Перезапустили wireguard')
@@ -386,12 +360,10 @@ async def del_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mess.edit_text('Удалили папку')
     sleep(load_time)
 
-    # todo: изменить BASE_DIR на WG_ETC_PATH
     subprocess.call(['cp', 'wghub.conf', WG_ETC_PATH], cwd=EASY_WG_QUICK_DIR)
     await mess.edit_text('Скопировали wghub.conf')
     sleep(load_time)
 
-    # todo: включить рестарт
     subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
     await mess.edit_text('Перезапустили wireguard')
     sleep(load_time)
@@ -399,46 +371,6 @@ async def del_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mess.edit_text(f'Удалили клиента {wghub_peer_name}')
 
     return ConversationHandler.END
-
-
-# async def stop_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
-#
-#     user_name = update.message.text
-#     subscribe_edit(user_name, 0)
-#     await update.message.reply_text(f"Закоментили строки пользователя...")
-#
-#     sleep(2)
-#     subprocess.call(['cp', f'{working_path}wghub.text', '/etc/wireguard/wghub.text'])
-#     await update.message.reply_text(f"Скопировали wghub.text...")
-#
-#     sleep(2)
-#     subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-#     await update.message.reply_text(f'Перезапустили сервер...')
-#
-#     await update.message.reply_text(f"Остановили подписку клиента {user_name}",
-#                                     reply_markup=ReplyKeyboardMarkup(main_buttons, resize_keyboard=True))
-#     return ConversationHandler.END
-
-
-# async def start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
-#
-#     user_name = update.message.text
-#     subscribe_edit(user_name, 1)
-#     await update.message.reply_text(f"Раскоментили строки пользователя...")
-#
-#     time.sleep(2)
-#     subprocess.call(['cp', f'{working_path}wghub.text', '/etc/wireguard/wghub.text'])
-#     await update.message.reply_text(f"Скопировали wghub.text...")
-#
-#     time.sleep(2)
-#     subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-#     await update.message.reply_text(f'Перезапустили сервер...')
-#
-#     await update.message.reply_text(f"Активировали подписку клиента {user_name}",
-#                                     reply_markup=ReplyKeyboardMarkup(main_buttons, resize_keyboard=True))
-#     return ConversationHandler.END
 
 
 async def get_conf(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -537,50 +469,6 @@ def wghub_editing(peer_name):
     os.chdir(BASE_DIR)
 
 
-# def files_edit(user_name):
-#
-# with open(f'{working_path}wghub.text', 'r', encoding='utf-8') as text_file:
-#     str_list = text_file.readlines()
-#
-#     # Finding need string number
-#     for line in str_list:
-#         if f'wgclient_{user_name}.text' in line:
-#             str_num = str_list.index(line) - 1
-#
-#     # Deleting 6 times on this index
-#     for i in range(6):
-#         str_list.pop(str_num)
-#
-# with open(f'{working_path}wghub.text', 'w', encoding='utf-8') as text_file:
-#     for line in str_list:
-#         text_file.write(line)
-
-
-# def subscribe_edit(user_name, mode):
-#     with open(f'{working_path}wghub.text', 'r', encoding='utf-8') as text_file:
-#         str_list = text_file.readlines()
-#
-#         # Finding need string number
-#         for line in str_list:
-#             if user_name in line:
-#                 str_num = str_list.index(line) + 1
-#
-#         # Comment or uncomment 4 strings from this index
-#         # Mode to rule: 0 - comment 1 - uncomment
-#         for i in range(str_num, str_num + 4):
-#             if mode:
-#                 if '#' not in str_list[i]:
-#                     break
-#                 str_list[i] = str_list[i][2:]
-#             else:
-#                 if '#' in str_list[i]:
-#                     break
-#                 str_list[i] = '# ' + str_list[i]
-#
-#     with open(f'{working_path}wghub.text', 'w', encoding='utf-8') as text_file:
-#         text_file.writelines(str_list)
-
-
 def main() -> None:
     application = Application.builder().token(TELE_TOKEN).build()
     restrict_filter = filters.User(user_id=ALLOWED_USERS)
@@ -615,25 +503,12 @@ def main() -> None:
     wg_show_handler = (CommandHandler('wg_show', wg_show, filters=restrict_filter))
     cancel_handler = (CommandHandler('cancel', cancel, filters=restrict_filter))
 
-    # start_stop_user_handler = ConversationHandler(
-    #     entry_points=[
-    #         MessageHandler(filters.Regex(f'\U00002705Возобновить клиента|\U0000274CОстановить клиента'), ask_name)],
-    #     states={
-    #         START_USER: [MessageHandler(filters.Regex('^\w*$'), start_user)],
-    #         STOP_USER: [MessageHandler(filters.Regex('^\w*$'), stop_user)],
-    #     },
-    #     fallbacks=[CommandHandler("cancel", cancel)],
-    #     allow_reentry=True
-    # )
-
-    # application.add_handler(CommandHandler("start", start))
-
     application.add_handler(add_client_handler)
     application.add_handler(client_interaction_handler)
     application.add_handler(wg_restart_handler)
     application.add_handler(wg_show_handler)
     application.add_handler(cancel_handler)
-    # application.add_handler(start_stop_user_handler)
+
     application.run_polling()
 
 
