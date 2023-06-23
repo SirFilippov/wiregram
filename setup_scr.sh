@@ -16,8 +16,8 @@ EASY_WG_QUICK_SCR="$WIREGRAM_DIR/easy-wg-quick/easy-wg-quick"
 # Создаем env
 read -r -p "Введите токен бота: " bot_token
 read -r -p "Введите телеграм-id администраторов через запятую без пробелов: " allowed_users
-echo "TELE_TOKEN=$bot_token" > "$ENV_DIR"
-echo "ALLOWED_USERS=$allowed_users" > "$ENV_DIR"
+echo "TELE_TOKEN=$bot_token" >> "$ENV_DIR"
+echo "ALLOWED_USERS=$allowed_users" >> "$ENV_DIR"
 
 # Установка нужного ПО
 apt-get -y update

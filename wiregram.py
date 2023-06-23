@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 # Todo: wg show с именами пиров а не кодами
 # Todo: сделать бота васап и телеги для клиентов
 # Todo: функция добавления id админов в env
+# Todo: conf и qr хранить в базе
 
 
 BASE_DIR = Path(__file__).resolve().parent  # Путь к python скрипту
@@ -147,8 +148,6 @@ class Client(Base):
 if not os.path.exists(DB_PATH):
     Base.metadata.create_all(engine)
 
-
-
 DELETE_CLIENT, GET_CONF, SHOW_CLIENTS = 0, 1, 2
 # START_USER, STOP_USER = 0, 1
 
@@ -158,7 +157,6 @@ ENTER_FIRST_NAME, \
     ENTER_SUBSCRIBE_STATUS, \
     ENTER_SUBSCRIBE_DURATION, \
     ENTER_DEVICE = range(6)
-
 
 device_buttons = ReplyKeyboardMarkup([['pc', 'smartphone']], resize_keyboard=True)
 subscrabe_status_buttons = ReplyKeyboardMarkup([['VIP', 'simple']], resize_keyboard=True)
@@ -214,7 +212,6 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return DELETE_CLIENT
         elif mess == '/get_conf':
             return GET_CONF
-
 
     # if update.message.text == f'\U00002705Возобновить клиента':
     #     await update.message.reply_text('\n'.join(show_usr_lst()),
@@ -297,13 +294,16 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text('Данные приняты, создаем клиента...',
                                     reply_markup=ReplyKeyboardRemove())
-    sleep(1)
+    sleep(load_time)
 
     peer_name = f'{context.user_data["first_name"]}_{context.user_data["last_name"]}'
     peer_name = translit(peer_name, reversed=True)
 
-    with open(os.path.join(EASY_WG_QUICK_DIR, 'seqno.txt'), 'r') as file:
-        peer_id = int(file.readline())
+    if os.path.exists(os.path.join(EASY_WG_QUICK_DIR, 'seqno.txt')):
+        with open(os.path.join(EASY_WG_QUICK_DIR, 'seqno.txt'), 'r') as file:
+            peer_id = int(file.readline())
+    else:
+        peer_id = 10
 
     new_client_id = str(Client.add(context.user_data['first_name'],
                                    context.user_data['last_name'],
@@ -342,8 +342,14 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sleep(load_time)
 
     # todo: включить рестарт
-    subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-    await mess.edit_text(text='Перезапустили wireguard')
+    if peer_id != 10:
+        subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
+        await mess.edit_text(text='Перезапустили wireguard')
+    else:
+        subprocess.call(['systemctl', 'enable', 'wg-quick@wghub'])
+        subprocess.call(['systemctl', 'start', 'wg-quick@wghub'])
+        await mess.edit_text(text='Запустили wireguard и установили режим перезапуска после рестарта сервера')
+
     sleep(load_time)
 
     qr_jpeg = make_qr(new_client_dir)
@@ -466,7 +472,7 @@ async def get_conf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def wg_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    subprocess.call(['systemctl', 'restart', 'wg-quick@wghub.service'])
+    subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
     await update.message.reply_text("Wireguard перезапущен")
 
 
@@ -531,24 +537,23 @@ def wghub_editing(peer_name):
     os.chdir(BASE_DIR)
 
 
-
 # def files_edit(user_name):
 #
-    # with open(f'{working_path}wghub.text', 'r', encoding='utf-8') as text_file:
-    #     str_list = text_file.readlines()
-    #
-    #     # Finding need string number
-    #     for line in str_list:
-    #         if f'wgclient_{user_name}.text' in line:
-    #             str_num = str_list.index(line) - 1
-    #
-    #     # Deleting 6 times on this index
-    #     for i in range(6):
-    #         str_list.pop(str_num)
-    #
-    # with open(f'{working_path}wghub.text', 'w', encoding='utf-8') as text_file:
-    #     for line in str_list:
-    #         text_file.write(line)
+# with open(f'{working_path}wghub.text', 'r', encoding='utf-8') as text_file:
+#     str_list = text_file.readlines()
+#
+#     # Finding need string number
+#     for line in str_list:
+#         if f'wgclient_{user_name}.text' in line:
+#             str_num = str_list.index(line) - 1
+#
+#     # Deleting 6 times on this index
+#     for i in range(6):
+#         str_list.pop(str_num)
+#
+# with open(f'{working_path}wghub.text', 'w', encoding='utf-8') as text_file:
+#     for line in str_list:
+#         text_file.write(line)
 
 
 # def subscribe_edit(user_name, mode):
@@ -609,7 +614,6 @@ def main() -> None:
     wg_restart_handler = (CommandHandler('wg_restart', wg_restart, filters=restrict_filter))
     wg_show_handler = (CommandHandler('wg_show', wg_show, filters=restrict_filter))
     cancel_handler = (CommandHandler('cancel', cancel, filters=restrict_filter))
-
 
     # start_stop_user_handler = ConversationHandler(
     #     entry_points=[
