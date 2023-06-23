@@ -58,7 +58,7 @@ class Client(Base):
     last_name: Mapped[str] = mapped_column(String)
     phone_number: Mapped[str] = mapped_column(String)
     activated_date: Mapped[date] = mapped_column(Date)
-    subscribe_duration: Mapped[int] = mapped_column(Integer, default=None)
+    subscribe_duration: Mapped[int] = mapped_column(Integer, default=None, nullable=True)
     subscribe_status = Column(Boolean)
     peer_id: Mapped[str] = mapped_column(Integer)
     device: Mapped[str] = mapped_column(String)
