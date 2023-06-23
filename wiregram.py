@@ -441,7 +441,6 @@ def trash_delete(peer_name):
     os.chdir(EASY_WG_QUICK_DIR)
     files_to_delete = [
         f'wgclient_{peer_name}.psk',
-        f'wgclient_{peer_name}.qrcode.txt',
         f'wgclient_{peer_name}.uci.txt'
     ]
 

@@ -51,6 +51,7 @@ Restart=always
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/wiregram.service
 
+mkdir "$WIREGRAM_DIR/clients"
 systemctl enable wiregram.service
 systemctl start wiregram.service
 
