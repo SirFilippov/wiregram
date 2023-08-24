@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Кома для скачивания и установки моего репо:
-#cd /home && git clone https://github.com/SirFilippov/wiregram.git && chmod +x /home/wiregram/setup_scr.sh && /home/wiregram/setup_scr.sh
-
-
+#cd /home && git clone https://github.com/SirFilippov/wiregram.git && chmod +x /home/wiregram/setup_scr.sh && sudo /home/wiregram/setup_scr.sh
 
 # Пути
 WIREGRAM_DIR=$"/home/wiregram"

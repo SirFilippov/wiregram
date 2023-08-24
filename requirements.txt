@@ -25,3 +25,4 @@ tzlocal==4.2
 urllib3==1.26.13
 SQLAlchemy~=2.0.15
 transliterate~=1.10.2
+celery~=5.3.1
