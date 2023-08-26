@@ -1,13 +1,14 @@
 import json
 import logging
 from time import sleep
-import qrcode
 import os
 import subprocess
 import re
 
 from transliterate import translit
 import requests
+
+from file_manager import trash_delete, make_qr, wghub_editing
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -19,26 +20,29 @@ from telegram.ext import (
     filters,
 )
 
-from config import (
+from settings import (
     TELE_TOKEN,
     EASY_WG_QUICK_DIR,
     CLIENTS_DIR,
     EASY_WG_QUICK_SCR,
     WG_ETC_PATH,
     ALLOWED_USERS,
-    BASE_DIR
+    DEV
 )
 
 from db import Client
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+if not DEV:
+    import sub_check
+
 logger = logging.getLogger(__name__)
 
-
-DELETE_CLIENT, GET_CONF, SHOW_CLIENTS = 0, 1, 2
+DELETE_CLIENT, \
+    GET_CONF, \
+    SHOW_CLIENTS, \
+    RENEW, \
+    RENEW_DUR, \
+    SUSPEND = range(7, 13)
 # START_USER, STOP_USER = 0, 1
 
 ENTER_FIRST_NAME, \
@@ -60,6 +64,10 @@ def set_menu():
          'description': 'Добавить клиента'},
         {'command': 'del_client',
          'description': 'Удалить клиента'},
+        {'command': 'renew_client',
+         'description': 'Возобновить клиента'},
+        {'command': 'suspend_client',
+         'description': 'Приостановить клиента'},
         {'command': 'show_clients',
          'description': 'Список пользователей'},
         {'command': 'get_conf',
@@ -86,7 +94,7 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         reply_markup=ReplyKeyboardRemove())
         return ENTER_FIRST_NAME
 
-    if mess in ('/del_client', '/get_conf', '/show_clients'):
+    if mess in ('/del_client', '/get_conf', '/show_clients', '/renew_client', '/suspend_client'):
         all_users = Client.show_all()
         if all_users:
             await update.message.reply_text('\n'.join(all_users))
@@ -102,6 +110,10 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return DELETE_CLIENT
         elif mess == '/get_conf':
             return GET_CONF
+        elif mess == '/renew_client':
+            return RENEW
+        elif mess == '/suspend_client':
+            return SUSPEND
 
 
 async def enter_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -131,14 +143,14 @@ async def enter_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def enter_subscribe_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == 'VIP':
-        context.user_data['subscribe_status'] = True
+        context.user_data['subscribe_status'] = 'VIP'
         context.user_data['subscribe_duration'] = None
         await update.message.reply_text('Введите девайс клиента\n/cancel что бы выйти из операции.',
                                         reply_markup=device_buttons)
         return ENTER_DEVICE
 
     elif update.message.text == 'simple':
-        context.user_data['subscribe_status'] = False
+        context.user_data['subscribe_status'] = 'simple'
         await update.message.reply_text('Введите длительность подписки (в днях)\n/cancel что бы выйти из операции.',
                                         reply_markup=ReplyKeyboardRemove())
         return ENTER_SUBSCRIBE_DURATION
@@ -218,15 +230,15 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mess.edit_text(text='Скопировали wghub.conf')
     sleep(load_time)
 
-    if peer_id != 10:
-        subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-        await mess.edit_text(text='Перезапустили wireguard')
-    else:
-        subprocess.call(['systemctl', 'enable', 'wg-quick@wghub'])
-        subprocess.call(['systemctl', 'start', 'wg-quick@wghub'])
-        await mess.edit_text(text='Запустили wireguard и установили режим перезапуска после рестарта сервера')
-
-    sleep(load_time)
+    if not DEV:
+        if peer_id != 10:
+            subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
+            await mess.edit_text(text='Перезапустили wireguard')
+        else:
+            subprocess.call(['systemctl', 'enable', 'wg-quick@wghub'])
+            subprocess.call(['systemctl', 'start', 'wg-quick@wghub'])
+            await mess.edit_text(text='Запустили wireguard и установили режим перезапуска после рестарта сервера')
+        sleep(load_time)
 
     qr_jpeg = make_qr(new_client_dir)
     await mess.edit_text(text=f'Клиент добавлен\n{Client.select_client(new_client_id)}')
@@ -249,11 +261,11 @@ async def del_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
 
     user_id = update.message.text
-    wghub_peer_name = Client.delete_client(user_id)
+    wghub_peer_id = Client.delete_client(user_id)
     mess = await update.message.reply_text('Удалили из бд')
     sleep(load_time)
 
-    wghub_editing(wghub_peer_name)
+    wghub_editing(wghub_peer_id)
     await mess.edit_text('Удалили из wghub.conf')
     sleep(load_time)
 
@@ -266,11 +278,12 @@ async def del_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mess.edit_text('Скопировали wghub.conf')
     sleep(load_time)
 
-    subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-    await mess.edit_text('Перезапустили wireguard')
-    sleep(load_time)
+    if not DEV:
+        subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
+        await mess.edit_text('Перезапустили wireguard')
+        sleep(load_time)
 
-    await mess.edit_text(f'Удалили клиента {wghub_peer_name}')
+    await mess.edit_text(f'Удалили клиента {user_id}')
 
     return ConversationHandler.END
 
@@ -323,51 +336,28 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-def make_qr(new_client_dir):
-    text_file = os.listdir(new_client_dir)[0]
-    text_file = os.path.join(new_client_dir, text_file)
-    qr_name = text_file[:-5] + '_qrcode.jpeg'
-    qr_path = os.path.join(CLIENTS_DIR, qr_name)
-
-    with open(text_file, 'r', encoding='utf-8') as text_file:
-        file_info = text_file.read()
-        img = qrcode.make(file_info)
-        type(img)
-        img.save(qr_path)
-
-    return qr_path
+async def renew_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
+    context.user_data['user_id'] = update.message.text
+    await update.message.reply_text('Введите длительность подписки (в днях)\n/cancel что бы выйти из операции.')
+    return RENEW_DUR
 
 
-def trash_delete(peer_name):
-    os.chdir(EASY_WG_QUICK_DIR)
-    files_to_delete = [
-        f'wgclient_{peer_name}.psk',
-        f'wgclient_{peer_name}.uci.txt'
-    ]
-
-    for file in files_to_delete:
-        os.remove(file)
-    os.chdir(BASE_DIR)
+async def get_renew_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
+    context.user_data['renew_duration'] = update.message.text
+    Client.renew_client(context.user_data['user_id'],
+                        context.user_data['renew_duration'])
+    await update.message.reply_text('Клиент возобновлен')
+    return ConversationHandler.END
 
 
-def wghub_editing(peer_name):
-    os.chdir(EASY_WG_QUICK_DIR)
-    with open(f'wghub.conf', 'r', encoding='utf-8') as text:
-        str_list = text.readlines()
-
-        # Finding need string number
-        for line in str_list:
-            if f'wgclient_{peer_name}.conf' in line:
-                str_num = str_list.index(line) - 1
-
-        # Deleting 6 times on this index
-        for i in range(6):
-            str_list.pop(str_num)
-
-    with open(f'wghub.conf', 'w', encoding='utf-8') as text:
-        for line in str_list:
-            text.write(line)
-    os.chdir(BASE_DIR)
+async def suspend_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
+    user_id = update.message.text
+    Client.suspend_client(user_id)
+    await update.message.reply_text('Клиент приостановлен')
+    return ConversationHandler.END
 
 
 def main() -> None:
@@ -391,11 +381,18 @@ def main() -> None:
 
     client_interaction_handler = ConversationHandler(
         fallbacks=[CommandHandler("cancel", cancel)],
-        entry_points=[CommandHandler(['del_client', 'show_clients', 'get_conf'], ask_name,
+        entry_points=[CommandHandler(['del_client',
+                                      'show_clients',
+                                      'get_conf',
+                                      'renew_client',
+                                      'suspend_client'], ask_name,
                                      filters=restrict_filter)],
         states={
             DELETE_CLIENT: [MessageHandler(filters.TEXT & (~ filters.COMMAND), del_client)],
             GET_CONF: [MessageHandler(filters.TEXT & (~ filters.COMMAND), get_conf)],
+            RENEW: [MessageHandler(filters.TEXT & (~ filters.COMMAND), renew_client)],
+            RENEW_DUR: [MessageHandler(filters.TEXT & (~ filters.COMMAND), get_renew_duration)],
+            SUSPEND: [MessageHandler(filters.TEXT & (~ filters.COMMAND), suspend_client)]
         },
         allow_reentry=False
     )
@@ -411,6 +408,11 @@ def main() -> None:
     application.add_handler(cancel_handler)
 
     application.run_polling()
+
+
+# todo: сделать проверку на то что пытаемся остановить VIP
+# todo: на приостановке климента убираем статус подписки?
+# todo: сделать опцию изменения длительности подписки?
 
 
 if __name__ == '__main__':

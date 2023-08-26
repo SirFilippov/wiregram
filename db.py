@@ -7,21 +7,22 @@ from sqlalchemy import (
     select,
     cast,
     Column,
-    delete
+    delete,
+    update
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
-from datetime import date, datetime, timedelta
-from config import DB_PATH
+from datetime import date, timedelta
+from settings import DB_PATH
 import os
-
-from sqlalchemy.sql.expression import false, true
+import logging
+from file_manager import wghub_editing
 
 
 class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(f"sqlite:///{DB_PATH}", echo=True)
+engine = create_engine(f"sqlite:///{DB_PATH}")
 
 
 class Client(Base):
@@ -32,7 +33,7 @@ class Client(Base):
     phone_number: Mapped[str] = mapped_column(String)
     activated_date: Mapped[date] = mapped_column(Date)
     subscribe_duration: Mapped[int] = mapped_column(Integer, default=None, nullable=True)
-    subscribe_status = Column(Boolean)
+    subscribe_status = mapped_column(String)
     peer_id: Mapped[str] = mapped_column(Integer)
     device: Mapped[str] = mapped_column(String)
     peer_name: Mapped[str] = mapped_column(String)
@@ -71,15 +72,15 @@ class Client(Base):
     @staticmethod
     def delete_client(client_id):
         with Session(engine) as session:
-            stmt = select(Client.peer_name).where(Client.user_id == client_id)
+            stmt = select(Client).where(Client.user_id == client_id)
             for row in session.execute(stmt):
-                wghub_peer_name = row[0] + '_id' + client_id
+                wghub_peer_id = row[0].peer_id
 
             stmt = delete(Client).where(Client.user_id == int(client_id))
             session.execute(stmt)
 
             session.commit()
-        return wghub_peer_name
+        return wghub_peer_id
 
     @staticmethod
     def show_all():
@@ -92,10 +93,13 @@ class Client(Base):
 
             all_users = []
             for row in session.execute(stmt):
-                if row[0][0] == '1':
-                    all_users.append(f'⚪ {row[0][2:]}')
-                else:
-                    all_users.append(f'⚫ {row[0][2:]}')
+                row = row[0].split()
+                if row[0] == 'simple':
+                    all_users.append(f'\U000026AA {" ".join(row[1:])}')
+                elif row[0] == 'VIP':
+                    all_users.append(f'\U0001F7E1 {" ".join(row[1:])}')
+                elif row[0] in ('expired', 'stopped'):
+                    all_users.append(f'\U0001F480 {" ".join(row[1:])}')
             return all_users
 
     @staticmethod
@@ -107,22 +111,53 @@ class Client(Base):
 
     @staticmethod
     def select_expired_subscribes():
-        expired_subscribes = []
+        logging.info('Плановая проверка подписки...')
         today_date = date.today()
         with Session(engine) as session:
-            stmt = select(Client).where(Client.subscribe_status == false())
-            for client in session.execute(stmt):
+            select_stmt = select(Client).where(Client.subscribe_status == 'simple')
+            for client in session.execute(select_stmt):
                 activated_date = client[0].activated_date
                 subscribe_duration = timedelta(days=int(client[0].subscribe_duration))
                 expired_subscribe_date = activated_date + subscribe_duration
                 if expired_subscribe_date < today_date:
-                    expired_subscribes.append(client)
-            return expired_subscribes
+                    logging.info(f"У пользователя {client[0].peer_name} закончился срок подписки")
+                    wghub_editing(client[0].peer_id, mode='suspend')
+                    update_stmt = update(Client).where(Client.peer_id == client[0].peer_id).values(subscribe_status='expired',
+                                                                                                   subscribe_duration=None)
+                    session.execute(update_stmt)
+                    session.commit()
+
+    @staticmethod
+    def renew_client(user_id, renew_duration):
+        logging.info('Возобновляем подписку пользователя...')
+        with Session(engine) as session:
+            select_stmt = select(Client).where(Client.user_id == user_id)
+            for client in session.execute(select_stmt):
+                wghub_editing(client[0].peer_id, 'renew')
+                update_stmt = update(Client).where(Client.user_id == user_id).values(
+                    subscribe_status='simple',
+                    subscribe_duration=renew_duration,
+                    activated_date=date.today())
+                session.execute(update_stmt)
+                session.commit()
+
+    @staticmethod
+    def suspend_client(user_id):
+        logging.info('Останавливаем подписку пользователя...')
+        with Session(engine) as session:
+            select_stmt = select(Client).where(Client.user_id == user_id)
+            for client in session.execute(select_stmt):
+                wghub_editing(client[0].peer_id, mode='suspend')
+                update_stmt = update(Client).where(Client.peer_id == client[0].peer_id).values(
+                    subscribe_status='stopped',
+                    subscribe_duration=None)
+                session.execute(update_stmt)
+                session.commit()
 
 
 if not os.path.exists(DB_PATH):
-    print('Создали бд')
+    logging.info('Создали бд')
     Base.metadata.create_all(engine)
 
-
-print(Client.select_expired_subscribes())
+if __name__ == '__main__':
+    Client.show_all()
