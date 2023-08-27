@@ -1,11 +1,30 @@
 import os
+from time import sleep
+import subprocess
+import logging
+
 import qrcode
+
 from settings import (
     EASY_WG_QUICK_DIR,
     CLIENTS_DIR,
-    BASE_DIR
+    BASE_DIR,
+    DEV,
+    LOAD_TIME,
+    WG_ETC_PATH,
 )
-import logging
+
+
+def apply_changes():
+    os.chdir(EASY_WG_QUICK_DIR)
+    subprocess.call(['cp', f'wghub.conf', WG_ETC_PATH], cwd=EASY_WG_QUICK_DIR)
+    sleep(LOAD_TIME)
+
+    if not DEV:
+        subprocess.call(['systemctl', 'enable', 'wg-quick@wghub'])
+        subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
+        sleep(LOAD_TIME)
+    os.chdir(BASE_DIR)
 
 
 def make_qr(new_client_dir):
@@ -27,7 +46,8 @@ def trash_delete(peer_name):
     os.chdir(EASY_WG_QUICK_DIR)
     files_to_delete = [
         f'wgclient_{peer_name}.psk',
-        f'wgclient_{peer_name}.uci.txt'
+        f'wgclient_{peer_name}.uci.txt',
+        f'wgclient_{peer_name}.qrcode.txt'
     ]
 
     for file in files_to_delete:

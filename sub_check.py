@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from db import Client
@@ -30,12 +31,13 @@ def run_continuously(interval=1):
 
 
 def check_subscribe():
-    Client.select_expired_subscribes()
+    Client.suspend_expired_subscribes()
 
 
-schedule.every(30).seconds.do(check_subscribe)
+schedule.every().day.at("10:30").do(check_subscribe)
 stop_run_continuously = run_continuously()
 
-if __name__ == '__main__':
-    schedule.every(5).seconds.do(check_subscribe)
-    stop_run_continuously = run_continuously()
+# schedule.every(30).seconds.do(check_subscribe)
+# stop_run_continuously = run_continuously()
+
+logging.info("Ежедневная проверка запущена")

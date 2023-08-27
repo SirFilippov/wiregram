@@ -3,14 +3,15 @@ from pathlib import Path
 import os
 import logging
 
-DEV = True
+DEV = False
 BASE_DIR = Path(__file__).resolve().parent  # Путь к python скрипту
 ENV = os.path.join(BASE_DIR, 'tele_data.env')  # Путь к env на сервере
 CLIENTS_DIR = os.path.join(BASE_DIR, 'clients')  # Путь к папке с клиентами
 EASY_WG_QUICK_DIR = os.path.join(BASE_DIR, 'easy-wg-quick')  # Путь к папке скрипта easy-wg-quick
 EASY_WG_QUICK_SCR = os.path.join(EASY_WG_QUICK_DIR, 'easy-wg-quick')  # Путь к исполняющему скрипту easy-wg-quick
-DB_PATH = os.path.join(BASE_DIR, 'vpnmanager.db')  # Путь к БД
+DB_PATH = os.path.join(BASE_DIR, 'wiregram.db')  # Путь к БД
 WG_ETC_PATH = '/etc/wireguard/wghub.conf'  # Путь text файлу wireguard
+LOAD_TIME = 1
 
 
 load_dotenv(ENV)

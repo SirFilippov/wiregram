@@ -3,10 +3,8 @@ from sqlalchemy import (
     String,
     Integer,
     Date,
-    Boolean,
     select,
     cast,
-    Column,
     delete,
     update
 )
@@ -15,7 +13,7 @@ from datetime import date, timedelta
 from settings import DB_PATH
 import os
 import logging
-from file_manager import wghub_editing
+from file_manager import wghub_editing, apply_changes
 
 
 class Base(DeclarativeBase):
@@ -23,6 +21,14 @@ class Base(DeclarativeBase):
 
 
 engine = create_engine(f"sqlite:///{DB_PATH}")
+
+'''
+Статусы подписок:
+VIP - бессрочная
+simple - обычная, срок окончания в столбце subscribe_duration, дата активации в столбце activated_date
+expired - отсановленная по расписанию (чек раз в день), коментится в conf-файле WG, можно возобновить
+stopped - действующая, но остановленная вручную, можно возобновить
+'''
 
 
 class Client(Base):
@@ -33,7 +39,7 @@ class Client(Base):
     phone_number: Mapped[str] = mapped_column(String)
     activated_date: Mapped[date] = mapped_column(Date)
     subscribe_duration: Mapped[int] = mapped_column(Integer, default=None, nullable=True)
-    subscribe_status = mapped_column(String)
+    subscribe_status: Mapped[str] = mapped_column(String)
     peer_id: Mapped[str] = mapped_column(Integer)
     device: Mapped[str] = mapped_column(String)
     peer_name: Mapped[str] = mapped_column(String)
@@ -110,7 +116,7 @@ class Client(Base):
                 return client[0]
 
     @staticmethod
-    def select_expired_subscribes():
+    def suspend_expired_subscribes():
         logging.info('Плановая проверка подписки...')
         today_date = date.today()
         with Session(engine) as session:
@@ -126,33 +132,85 @@ class Client(Base):
                                                                                                    subscribe_duration=None)
                     session.execute(update_stmt)
                     session.commit()
+        apply_changes()
+
 
     @staticmethod
-    def renew_client(user_id, renew_duration):
-        logging.info('Возобновляем подписку пользователя...')
+    def renew_client(user_id, mode, renew_duration=0):
+        """
+        Режимы включения:
+        renew - просто включить подписку которая уже оплачена/активна и выключена была вручную
+        extend - добавить количество дней в подписку
+        reopen - включение подписки из статуса expired, с изменением даты активации
+        """
+        logging.info(f'Возобновляем/продлеваем подписку пользователя в режиме {mode}...')
         with Session(engine) as session:
             select_stmt = select(Client).where(Client.user_id == user_id)
             for client in session.execute(select_stmt):
                 wghub_editing(client[0].peer_id, 'renew')
-                update_stmt = update(Client).where(Client.user_id == user_id).values(
-                    subscribe_status='simple',
-                    subscribe_duration=renew_duration,
-                    activated_date=date.today())
+
+                if mode == 'renew':
+                    update_stmt = update(Client).where(Client.user_id == user_id).values(
+                        subscribe_status='simple')
+                    expired_date = client[0].activated_date + timedelta(days=int(client[0].subscribe_duration))
+                elif mode == 'extend':
+                    renew_duration = int(client[0].subscribe_duration) + int(renew_duration)
+                    update_stmt = update(Client).where(Client.user_id == user_id).values(
+                        subscribe_duration=renew_duration)
+                    expired_date = date.today() + timedelta(days=int(renew_duration))
+                elif mode == 'reopen':
+                    update_stmt = update(Client).where(Client.user_id == user_id).values(
+                        subscribe_status='simple',
+                        subscribe_duration=renew_duration,
+                        activated_date=date.today())
+                    expired_date = date.today() + timedelta(days=int(renew_duration))
+                else:
+                    raise ValueError('Не один из режимов не выбран')
+
                 session.execute(update_stmt)
                 session.commit()
+                expired_date = expired_date.strftime('%d.%m.%Y')
+                return expired_date
 
     @staticmethod
     def suspend_client(user_id):
         logging.info('Останавливаем подписку пользователя...')
+        today_date = date.today()
         with Session(engine) as session:
             select_stmt = select(Client).where(Client.user_id == user_id)
             for client in session.execute(select_stmt):
+                activated_date = client[0].activated_date
+                subscribe_duration = timedelta(days=int(client[0].subscribe_duration))
+                expired_subscribe_date = activated_date + subscribe_duration
                 wghub_editing(client[0].peer_id, mode='suspend')
                 update_stmt = update(Client).where(Client.peer_id == client[0].peer_id).values(
-                    subscribe_status='stopped',
-                    subscribe_duration=None)
+                    subscribe_status='stopped')
                 session.execute(update_stmt)
                 session.commit()
+                expired_subscribe_date = expired_subscribe_date.strftime('%d.%m.%Y')
+                return expired_subscribe_date
+
+    @staticmethod
+    def check_subscribe_status(user_id):
+        with Session(engine) as session:
+            select_stmt = select(Client).where(Client.user_id == user_id)
+            for client in session.execute(select_stmt):
+                return client[0].subscribe_status
+
+    @staticmethod
+    def check_subscribe_duration(user_id):
+        with Session(engine) as session:
+            select_stmt = select(Client).where(Client.user_id == user_id)
+            for client in session.execute(select_stmt):
+                return client[0].subscribe_duration
+
+    @staticmethod
+    def check_expired_date(user_id):
+        with Session(engine) as session:
+            select_stmt = select(Client).where(Client.user_id == user_id)
+            for client in session.execute(select_stmt):
+                expired_date = client[0].activated_date + timedelta(days=int(client[0].subscribe_duration))
+                return expired_date
 
 
 if not os.path.exists(DB_PATH):
@@ -160,4 +218,6 @@ if not os.path.exists(DB_PATH):
     Base.metadata.create_all(engine)
 
 if __name__ == '__main__':
-    Client.show_all()
+    # Client.suspend_client(48)
+    # print(Client.renew_client(40, 'renew'))
+    Client.suspend_expired_subscribes()

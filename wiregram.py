@@ -8,7 +8,7 @@ import re
 from transliterate import translit
 import requests
 
-from file_manager import trash_delete, make_qr, wghub_editing
+from file_manager import trash_delete, make_qr, wghub_editing, apply_changes
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -27,7 +27,8 @@ from settings import (
     EASY_WG_QUICK_SCR,
     WG_ETC_PATH,
     ALLOWED_USERS,
-    DEV
+    DEV,
+    LOAD_TIME
 )
 
 from db import Client
@@ -37,25 +38,23 @@ if not DEV:
 
 logger = logging.getLogger(__name__)
 
-DELETE_CLIENT, \
-    GET_CONF, \
-    SHOW_CLIENTS, \
-    RENEW, \
-    RENEW_DUR, \
-    SUSPEND = range(7, 13)
-# START_USER, STOP_USER = 0, 1
-
 ENTER_FIRST_NAME, \
     ENTER_LAST_NAME, \
     ENTER_PHONE_NUMBER, \
     ENTER_SUBSCRIBE_STATUS, \
     ENTER_SUBSCRIBE_DURATION, \
-    ENTER_DEVICE = range(6)
+    ENTER_DEVICE, \
+    DELETE_CLIENT, \
+    GET_CONF, \
+    SHOW_CLIENTS, \
+    RENEW_SUB, \
+    RENEW_SUB_DUR, \
+    SUSPEND_SUB, \
+    RENEW_APPROVE = range(13)
 
 device_buttons = ReplyKeyboardMarkup([['pc', 'smartphone']], resize_keyboard=True)
 subscrabe_status_buttons = ReplyKeyboardMarkup([['VIP', 'simple']], resize_keyboard=True)
-
-load_time = 1
+renew_approve_buttons = ReplyKeyboardMarkup([['Да', 'Нет']], resize_keyboard=True)
 
 
 def set_menu():
@@ -65,9 +64,9 @@ def set_menu():
         {'command': 'del_client',
          'description': 'Удалить клиента'},
         {'command': 'renew_client',
-         'description': 'Возобновить клиента'},
+         'description': 'Возобновить/продлить подписку'},
         {'command': 'suspend_client',
-         'description': 'Приостановить клиента'},
+         'description': 'Приостановить подписку'},
         {'command': 'show_clients',
          'description': 'Список пользователей'},
         {'command': 'get_conf',
@@ -90,7 +89,7 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mess = update.message.text
 
     if mess == f'/add_client':
-        await update.message.reply_text('Введите имя клиента\n/cancel что бы выйти из операции.',
+        await update.message.reply_text('Введите имя клиента\n/cancel что бы выйти из операции',
                                         reply_markup=ReplyKeyboardRemove())
         return ENTER_FIRST_NAME
 
@@ -111,33 +110,33 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif mess == '/get_conf':
             return GET_CONF
         elif mess == '/renew_client':
-            return RENEW
+            return RENEW_SUB
         elif mess == '/suspend_client':
-            return SUSPEND
+            return SUSPEND_SUB
 
 
 async def enter_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["first_name"] = update.message.text
-    await update.message.reply_text('Введите фамилию клиента\n/cancel что бы выйти из операции.')
+    await update.message.reply_text('Введите фамилию клиента\n/cancel что бы выйти из операции')
     return ENTER_LAST_NAME
 
 
 async def enter_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['last_name'] = update.message.text
-    await update.message.reply_text('Введите телефон клиента в формате +77777777777\n/cancel что бы выйти из операции.')
+    await update.message.reply_text('Введите телефон клиента в формате +77777777777\n/cancel что бы выйти из операции')
     return ENTER_PHONE_NUMBER
 
 
 async def enter_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if re.fullmatch(r'\+7\d{10}', update.message.text):
         context.user_data['phone_number'] = update.message.text
-        await update.message.reply_text('Введите статус подписки\n/cancel что бы выйти из операции.',
+        await update.message.reply_text('Введите статус подписки\n/cancel что бы выйти из операции',
                                         reply_markup=subscrabe_status_buttons)
         return ENTER_SUBSCRIBE_STATUS
     else:
         await update.message.reply_text('Неверный формат')
         await update.message.reply_text('Введите телефон клиента в формате +77777777777'
-                                        '\n/cancel что бы выйти из операции.')
+                                        '\n/cancel что бы выйти из операции')
         return ENTER_PHONE_NUMBER
 
 
@@ -145,29 +144,29 @@ async def enter_subscribe_status(update: Update, context: ContextTypes.DEFAULT_T
     if update.message.text == 'VIP':
         context.user_data['subscribe_status'] = 'VIP'
         context.user_data['subscribe_duration'] = None
-        await update.message.reply_text('Введите девайс клиента\n/cancel что бы выйти из операции.',
+        await update.message.reply_text('Введите девайс клиента\n/cancel что бы выйти из операции',
                                         reply_markup=device_buttons)
         return ENTER_DEVICE
 
     elif update.message.text == 'simple':
         context.user_data['subscribe_status'] = 'simple'
-        await update.message.reply_text('Введите длительность подписки (в днях)\n/cancel что бы выйти из операции.',
+        await update.message.reply_text('Введите длительность подписки (в днях)\n/cancel что бы выйти из операции',
                                         reply_markup=ReplyKeyboardRemove())
         return ENTER_SUBSCRIBE_DURATION
 
     else:
-        await update.message.reply_text('Выберите один из предложенных вариантов\n/cancel что бы выйти из операции.')
+        await update.message.reply_text('Выберите один из предложенных вариантов\n/cancel что бы выйти из операции')
         return ENTER_SUBSCRIBE_STATUS
 
 
 async def enter_subscribe_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if re.fullmatch(r'\d+', update.message.text):
         context.user_data['subscribe_duration'] = update.message.text
-        await update.message.reply_text('Введите девайс клиента\n/cancel что бы выйти из операции.',
+        await update.message.reply_text('Введите девайс клиента\n/cancel что бы выйти из операции',
                                         reply_markup=device_buttons)
         return ENTER_DEVICE
     else:
-        await update.message.reply_text('Некорректный ввод, нужно число\n/cancel что бы выйти из операции.')
+        await update.message.reply_text('Некорректный ввод, нужно число\n/cancel что бы выйти из операции')
         return ENTER_SUBSCRIBE_DURATION
 
 
@@ -179,12 +178,12 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message.text == 'smartphone':
         context.user_data['device'] = 'smartphone'
     else:
-        await update.message.reply_text('Выберите один из предложенных вариантов\n/cancel что бы выйти из операции.')
+        await update.message.reply_text('Выберите один из предложенных вариантов\n/cancel что бы выйти из операции')
         return ENTER_SUBSCRIBE_STATUS
 
     await update.message.reply_text('Данные приняты, создаем клиента...',
                                     reply_markup=ReplyKeyboardRemove())
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     peer_name = f'{context.user_data["first_name"]}_{context.user_data["last_name"]}'
     peer_name = translit(peer_name, reversed=True)
@@ -205,40 +204,33 @@ async def enter_device(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    peer_name))
 
     mess = await update.message.reply_text(text='Записали пользователя в БД')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     peer_name = f'{peer_name}_id{new_client_id}'
 
     new_client_dir = os.path.join(CLIENTS_DIR, new_client_id)
     subprocess.call(['mkdir', new_client_id], cwd=CLIENTS_DIR)
     await mess.edit_text('Создали папку пользователя')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     subprocess.call([EASY_WG_QUICK_SCR, peer_name], cwd=EASY_WG_QUICK_DIR)
     await mess.edit_text("Записали конфиг в wghub.conf")
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     subprocess.call(['mv', f'wgclient_{peer_name}.conf', f'{CLIENTS_DIR}/{new_client_id}'], cwd=EASY_WG_QUICK_DIR)
     await mess.edit_text(f'Переместили wgclient_{peer_name}.conf')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     trash_delete(peer_name)
     await mess.edit_text('Удилили треш')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     subprocess.call(['cp', f'wghub.conf', WG_ETC_PATH], cwd=EASY_WG_QUICK_DIR)
     await mess.edit_text(text='Скопировали wghub.conf')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
-    if not DEV:
-        if peer_id != 10:
-            subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-            await mess.edit_text(text='Перезапустили wireguard')
-        else:
-            subprocess.call(['systemctl', 'enable', 'wg-quick@wghub'])
-            subprocess.call(['systemctl', 'start', 'wg-quick@wghub'])
-            await mess.edit_text(text='Запустили wireguard и установили режим перезапуска после рестарта сервера')
-        sleep(load_time)
+    apply_changes()
+    await mess.edit_text(text='Применяем изменения, перезапускаем wireguard')
 
     qr_jpeg = make_qr(new_client_dir)
     await mess.edit_text(text=f'Клиент добавлен\n{Client.select_client(new_client_id)}')
@@ -263,25 +255,19 @@ async def del_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.text
     wghub_peer_id = Client.delete_client(user_id)
     mess = await update.message.reply_text('Удалили из бд')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     wghub_editing(wghub_peer_id)
     await mess.edit_text('Удалили из wghub.conf')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
     client_dir = os.path.join(CLIENTS_DIR, user_id)
     subprocess.call(['rm', '-rf', client_dir])
     await mess.edit_text('Удалили папку')
-    sleep(load_time)
+    sleep(LOAD_TIME)
 
-    subprocess.call(['cp', 'wghub.conf', WG_ETC_PATH], cwd=EASY_WG_QUICK_DIR)
-    await mess.edit_text('Скопировали wghub.conf')
-    sleep(load_time)
-
-    if not DEV:
-        subprocess.call(['systemctl', 'restart', 'wg-quick@wghub'])
-        await mess.edit_text('Перезапустили wireguard')
-        sleep(load_time)
+    await mess.edit_text(text='Применяем изменения, перезапускаем wireguard')
+    apply_changes()
 
     await mess.edit_text(f'Удалили клиента {user_id}')
 
@@ -339,24 +325,85 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def renew_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
     context.user_data['user_id'] = update.message.text
-    await update.message.reply_text('Введите длительность подписки (в днях)\n/cancel что бы выйти из операции.')
-    return RENEW_DUR
+    subscribe_duration = Client.check_subscribe_duration(context.user_data['user_id'])
+    subscribe_status = Client.check_subscribe_status(context.user_data['user_id'])
+    
+    if subscribe_status == 'VIP':
+        await update.message.reply_text('Операция отменена\n'
+                                        'Пользователь VIP, подписка бесконечна')
+        return ConversationHandler.END
+    elif subscribe_status == 'simple':
+        expired_date = Client.check_expired_date(context.user_data['user_id'])
+        await update.message.reply_text(f'Подписка пользователя всё еще активна до {expired_date}\n'
+                                        f'Продлить подписку?\n'
+                                        '/cancel что бы выйти из операции',
+                                        reply_markup=renew_approve_buttons)
+        return RENEW_APPROVE
+    elif subscribe_status == 'stopped':
+        expired_date = Client.renew_client(context.user_data['user_id'], 'renew')
+        await update.message.reply_text('Пользователь возобновлен\n'
+                                        f'Подписка пользователя всё еще активна до {expired_date}\n'
+                                        'Продлить подписку?\n'
+                                        '/cancel что бы выйти из операции',
+                                        reply_markup=renew_approve_buttons)
+        return RENEW_APPROVE
+    elif subscribe_status == 'expired':
+        await update.message.reply_text('Введите длительность подписки (в днях)\n'
+                                        '/cancel что бы выйти из операции')
+        return RENEW_SUB_DUR
+
+
+async def renew_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
+    if update.message.text == 'Да':
+        await update.message.reply_text(f'На сколько продлить? (в днях)\n'
+                                        '/cancel что бы выйти из операции',
+                                        reply_markup=ReplyKeyboardRemove())
+        return RENEW_SUB_DUR
+    else:
+        return ConversationHandler.END
 
 
 async def get_renew_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
     context.user_data['renew_duration'] = update.message.text
-    Client.renew_client(context.user_data['user_id'],
-                        context.user_data['renew_duration'])
-    await update.message.reply_text('Клиент возобновлен')
+    if Client.check_subscribe_status(context.user_data['user_id']) == 'simple':
+        expired_date = Client.renew_client(context.user_data['user_id'],
+                                           'extend',
+                                           context.user_data['renew_duration'])
+
+        await update.message.reply_text(text=f'Подписка продлена до {expired_date}')
+
+    elif Client.check_subscribe_status(context.user_data['user_id']) == 'expired':
+        expired_date = Client.renew_client(context.user_data['user_id'],
+                                           'reopen',
+                                           context.user_data['renew_duration'])
+
+        mess = await update.message.reply_text('Применяем изменения, перезапускаем wireguard')
+        apply_changes()
+        await mess.edit_text(text='Клиент возобновлен\n'
+                                  f'Подписка активна до {expired_date}')
+    else:
+        await update.message.reply_text('Ошибка статуса подписки')
     return ConversationHandler.END
 
 
 async def suspend_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("%s: %s", update.message.from_user.first_name, update.message.text)
     user_id = update.message.text
-    Client.suspend_client(user_id)
-    await update.message.reply_text('Клиент приостановлен')
+    subscribe_status = Client.check_subscribe_status(user_id)
+    if subscribe_status == 'VIP':
+        await update.message.reply_text('Операция отменена\n'
+                                        'Пользователь VIP')
+    elif subscribe_status in ('stopped', 'expired'):
+        await update.message.reply_text('Вы пытаетесь остановить уже неработающую/остановленную подписку\n'
+                                        'Операция отменена')
+    else:
+        expired_subscribe_date = Client.suspend_client(user_id)
+        mess = await update.message.reply_text('Применяем изменения, перезапускаем wireguard')
+        apply_changes()
+        await mess.edit_text(text='Подписка приостановлен\n'
+                                  f'Остановленная подписка активна до {expired_subscribe_date}')
     return ConversationHandler.END
 
 
@@ -365,6 +412,7 @@ def main() -> None:
     restrict_filter = filters.User(user_id=ALLOWED_USERS)
     set_menu()
 
+    # Добавление новых клиентов
     add_client_handler = ConversationHandler(
         fallbacks=[CommandHandler("cancel", cancel)],
         entry_points=[CommandHandler("add_client", ask_name, filters=restrict_filter)],
@@ -379,20 +427,23 @@ def main() -> None:
         allow_reentry=False
     )
 
+    # Операции с существующими клиентами
     client_interaction_handler = ConversationHandler(
         fallbacks=[CommandHandler("cancel", cancel)],
         entry_points=[CommandHandler(['del_client',
                                       'show_clients',
                                       'get_conf',
                                       'renew_client',
-                                      'suspend_client'], ask_name,
+                                      'suspend_client',
+                                      'extend_subscription'], ask_name,
                                      filters=restrict_filter)],
         states={
             DELETE_CLIENT: [MessageHandler(filters.TEXT & (~ filters.COMMAND), del_client)],
             GET_CONF: [MessageHandler(filters.TEXT & (~ filters.COMMAND), get_conf)],
-            RENEW: [MessageHandler(filters.TEXT & (~ filters.COMMAND), renew_client)],
-            RENEW_DUR: [MessageHandler(filters.TEXT & (~ filters.COMMAND), get_renew_duration)],
-            SUSPEND: [MessageHandler(filters.TEXT & (~ filters.COMMAND), suspend_client)]
+            RENEW_SUB: [MessageHandler(filters.TEXT & (~ filters.COMMAND), renew_client)],
+            RENEW_SUB_DUR: [MessageHandler(filters.TEXT & (~ filters.COMMAND), get_renew_duration)],
+            SUSPEND_SUB: [MessageHandler(filters.TEXT & (~ filters.COMMAND), suspend_client)],
+            RENEW_APPROVE: [MessageHandler(filters.TEXT & (~ filters.COMMAND), renew_approve)]
         },
         allow_reentry=False
     )
@@ -408,11 +459,6 @@ def main() -> None:
     application.add_handler(cancel_handler)
 
     application.run_polling()
-
-
-# todo: сделать проверку на то что пытаемся остановить VIP
-# todo: на приостановке климента убираем статус подписки?
-# todo: сделать опцию изменения длительности подписки?
 
 
 if __name__ == '__main__':
